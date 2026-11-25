@@ -1,0 +1,58 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Build dependencies
+RUN set -eux; \
+  apt-get update; \
+  apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    python3 \
+    ca-certificates \
+    curl \
+    xz-utils; \
+  apt-get clean -y; \
+  apt-get autoremove -y; \
+  rm -rf /var/lib/apt/lists/*
+
+# Bouffalo SDK and toolchain paths
+ENV BL_SDK_BASE=/opt/bouffalo_sdk
+ENV PATH=/opt/riscv64-unknown-elf/bin:${PATH}
+
+# Install the Bouffalo RISC-V cross-compiler
+ARG RISCV_GCC_VERSION=14.3.0
+
+RUN set -eux; \
+  curl -fsSL \
+    "https://github.com/bouffalolab/toolchain/releases/download/default/gcc-riscv-${RISCV_GCC_VERSION}-linux-x86_64.tar.xz" \
+    -o /tmp/gcc-riscv.tar.xz; \
+  tar -xf /tmp/gcc-riscv.tar.xz -C /opt; \
+  rm /tmp/gcc-riscv.tar.xz
+
+# Clone the Bouffalo SDK with its submodules
+RUN set -eux; \
+  git clone --depth 1 \
+    https://github.com/bouffalolab/bouffalo_sdk.git \
+    "${BL_SDK_BASE}"; \
+  git -C "${BL_SDK_BASE}" \
+    submodule update --init --recursive
+
+RUN git config --global --add safe.directory /workspace
+
+# Verify versions
+RUN set -eux; \
+  echo "=== Bouffalo SDK ==="; \
+  git -C "${BL_SDK_BASE}" describe --tags --always; \
+  echo "=== RISC-V GCC ==="; \
+  riscv64-unknown-elf-gcc --version
+
+# Default target configuration
+ENV CHIP=bl616
+ENV TANG_BOARD=m0sdock
+
+WORKDIR /workspace
+
+CMD ["/bin/bash"]

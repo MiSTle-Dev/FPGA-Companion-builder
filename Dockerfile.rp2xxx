@@ -1,0 +1,94 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Build dependencies and ARM cross-compiler
+RUN set -eux; \
+  apt-get update; \
+  apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    python3 \
+    python3-pip \
+    gcc-arm-none-eabi \
+    binutils-arm-none-eabi \
+    libnewlib-arm-none-eabi \
+    libstdc++-arm-none-eabi-newlib \
+    ca-certificates \
+    pkg-config \
+    libusb-1.0-0-dev; \
+  apt-get clean -y; \
+  apt-get autoremove -y; \
+  rm -rf /var/lib/apt/lists/*
+
+# Pico SDK paths
+ENV PICO_SDK_PATH=/opt/pico-sdk
+ENV PICO_TINYUSB_PATH=/opt/pico-sdk/lib/tinyusb
+ENV FREERTOS_KERNEL_PATH=/opt/pico-freertos
+
+# Clone the Pico SDK with its submodules
+RUN set -eux; \
+  git clone --depth 1 \
+    https://github.com/raspberrypi/pico-sdk.git \
+    "${PICO_SDK_PATH}"; \
+  git -C "${PICO_SDK_PATH}" \
+    submodule update --init --recursive
+
+# Update TinyUSB to latest stable release tag
+RUN set -eux; \
+  cd "${PICO_TINYUSB_PATH}"; \
+  git fetch --tags --force; \
+  LATEST_TAG=$(git tag -l '[0-9]*' --sort=-v:refname | head -n 1); \
+  test -n "${LATEST_TAG}"; \
+  echo "Using TinyUSB: ${LATEST_TAG}"; \
+  git checkout --detach "${LATEST_TAG}"; \
+  git submodule update --init --recursive
+
+# Install Pico-PIO-USB for TinyUSB
+RUN set -eux; \
+  cd "${PICO_TINYUSB_PATH}"; \
+  python3 tools/get_deps.py rp2040
+
+# Clone RPi Pico FreeRTOS
+RUN set -eux; \
+  git clone --depth 1 \
+    https://github.com/raspberrypi/FreeRTOS-Kernel.git \
+    "${FREERTOS_KERNEL_PATH}"; \
+  git -C "${FREERTOS_KERNEL_PATH}" \
+    submodule update --init --recursive
+
+# Install picotool
+ARG PICOTOOL_VERSION=master
+
+RUN set -eux; \
+  git clone \
+    https://github.com/raspberrypi/picotool.git \
+    /opt/picotool; \
+  cd /opt/picotool; \
+  git checkout "${PICOTOOL_VERSION}"; \
+  cmake -S . -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DPICO_SDK_PATH="${PICO_SDK_PATH}"; \
+  cmake --build build --parallel; \
+  cmake --install build
+
+RUN git config --global --add safe.directory /workspace
+
+# Verify versions
+RUN set -eux; \
+  echo "=== Pico SDK ==="; \
+  git -C "${PICO_SDK_PATH}" describe --tags --always; \
+  echo "=== TinyUSB ==="; \
+  git -C "${PICO_TINYUSB_PATH}" describe --tags --always; \
+  echo "=== FreeRTOS ==="; \
+  git -C "${FREERTOS_KERNEL_PATH}" describe --tags --always; \
+  echo "=== picotool ==="; \
+  picotool version
+
+WORKDIR /workspace
+
+CMD ["/bin/bash"]

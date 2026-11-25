@@ -1,0 +1,48 @@
+name: Build and publish Docker images
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [rp2xxx, bl616]
+
+    steps:
+      - name: Check out builder repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.variant }}
+          platforms: linux/amd64
+          pull: true
+          push: true
+          tags: ghcr.io/mistle-dev/fpga-companion-builder-${{ matrix.variant }}:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ job.workflow_repository }}
