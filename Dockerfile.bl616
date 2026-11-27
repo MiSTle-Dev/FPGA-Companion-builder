@@ -1,4 +1,8 @@
+ARG BL_SDK_TAG=v2.3.39
+
 FROM ubuntu:24.04
+
+ARG BL_SDK_TAG
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -37,6 +41,7 @@ RUN set -eux; \
   git clone --depth 1 \
     https://github.com/bouffalolab/bouffalo_sdk.git \
     "${BL_SDK_BASE}"; \
+  git checkout tags/${BL_SDK_TAG}; \
   git -C "${BL_SDK_BASE}" \
     submodule update --init --recursive
 
