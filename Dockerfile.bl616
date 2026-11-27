@@ -39,11 +39,10 @@ RUN set -eux; \
 # Clone the Bouffalo SDK with its submodules
 RUN set -eux; \
   git clone --depth 1 \
+    --branch ${BL_SDK_TAG} \
     https://github.com/bouffalolab/bouffalo_sdk.git \
     "${BL_SDK_BASE}"; \
-  git -C "${BL_SDK_BASE}" checkout tags/${BL_SDK_TAG}; \
-  git -C "${BL_SDK_BASE}" \
-    submodule update --init --recursive
+  git -C "${BL_SDK_BASE}" submodule update --init --recursive
 
 RUN git config --global --add safe.directory /workspace
 
